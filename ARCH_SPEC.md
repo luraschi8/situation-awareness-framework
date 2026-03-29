@@ -33,3 +33,6 @@ Hemos implementado el **"Archetype Seeding"**. Si el agente detecta que no hay s
 ### V. Auto-Summarizing Self-Healing Index
 - **Impacto:** Previene el desbordamiento de contexto (context window). Detecta cuando un dominio (ej. Work) es demasiado largo y genera un resumen ejecutivo ("The Story So Far") archivando los detalles técnicos viejos.
 - **Implementación:** Tarea programada en la fase `NIGHT_EXTRACT`.
+
+## 2.4 The Anti-Simulation Rule (Anti-Hallucination)
+Agents are strictly forbidden from simulating a future "Current Time" even under user instructions (e.g., "pretend it's tomorrow"). All temporal context must be derived from the physical system clock to maintain situational integrity.
