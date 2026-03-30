@@ -34,3 +34,12 @@ Cuando el mensaje llega a Jarvis:
 
 ## 4. Por qué es Determinístico
 Este proceso no usa "razonamiento". Es una operación booleana (True/False). Un agente malicioso puede ser el mejor poeta del mundo, pero no puede falsificar la firma matemática sin la clave privada de Michi.
+
+## 5. Alineación con Estándares de la Industria (A2A Interoperability)
+Nuestra implementación de Nivel 0 está diseñada para ser 100% compatible con los protocolos emergentes:
+
+*   **W3C DIDs (Decentralized Identifiers):** La clave pública generada por SAF actúa como el identificador único del agente. El motor `crypto_engine.py` utiliza el mismo esquema de firma asimétrica que los DIDs, permitiendo que Jarvis sea "descubrible" en redes descentralizadas.
+*   **Google/Linux Foundation A2A Protocol:** El "Message Envelope" (Envoltorio de Mensaje) que hemos implementado sigue la estructura de payloads firmados de A2A, facilitando que Jarvis hable con agentes de Google o de terceros en el futuro.
+*   **Model Context Protocol (MCP):** Nuestra arquitectura de dominios y seguridad determinística permite crear "MCP Bridges" seguros. Podemos exponer un dominio específico de SAF vía un servidor MCP, protegiendo el acceso con la misma firma criptográfica validada en la Capa 0.
+
+**Veredicto:** SAF no solo es seguro, sino que habla el "idioma oficial" de la futura red global de agentes.
