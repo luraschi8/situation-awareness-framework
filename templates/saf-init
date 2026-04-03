@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
+import json
 import os
+import sys
+
+# Allow imports from the project root
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from skills.saf_core.lib.domains import ARCHETYPE_KEYWORDS, CONFIG_PATH
 
 
 def bootstrap():
@@ -20,19 +26,24 @@ def bootstrap():
     choice = input("Select (1/2/3): ").strip()
     if choice == "1":
         domains = ["Work", "Projects", "Infrastructure"]
+        router_keywords = ARCHETYPE_KEYWORDS["professional"]
     elif choice == "2":
         domains = ["Family", "Home", "Health"]
+        router_keywords = ARCHETYPE_KEYWORDS["family"]
     elif choice == "3":
         raw = input("Enter domain names separated by commas: ").strip()
         domains = [d.strip() for d in raw.split(",") if d.strip()]
         if not domains:
             print("No domains provided. Aborting.")
             return
+        router_keywords = {d.lower(): [] for d in domains}
+        print("Note: Custom domains have empty keyword lists.")
+        print(f"Edit {CONFIG_PATH} to add keywords.")
     else:
         print(f"Invalid choice: {choice}. Aborting.")
         return
 
-    # Create structure
+    # Create domain directories
     os.makedirs("memory/domains", exist_ok=True)
     for d in domains:
         path = f"memory/domains/{d.lower()}"
@@ -41,6 +52,15 @@ def bootstrap():
         if not os.path.exists(setup_file):
             with open(setup_file, "w") as f:
                 f.write(f"# {d} Domain\n\nGenerated via SAF Bootstrap.")
+
+    # Create router config (skip if already exists to preserve customizations)
+    os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
+    if os.path.exists(CONFIG_PATH):
+        print(f"Router config already exists at {CONFIG_PATH}, skipping.")
+    else:
+        with open(CONFIG_PATH, 'w') as f:
+            json.dump(router_keywords, f, indent=2)
+        print(f"Router config written to {CONFIG_PATH}")
 
     print(f"SAF structure created with domains: {', '.join(domains)}")
 

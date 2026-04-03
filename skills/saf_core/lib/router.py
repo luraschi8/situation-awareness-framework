@@ -1,13 +1,18 @@
+import json
+import os
 import re
+
+from skills.saf_core.lib.domains import CONFIG_PATH, DEFAULT_KEYWORDS
 
 GENERAL_DOMAIN = "general"
 
-DOMAIN_KEYWORDS = {
-    "work": ["meeting", "job", "office", "deadline", "report"],
-    "family": ["family", "kids", "school", "gym", "health"],
-    "projects": ["project", "cryptography", "coding", "deploy"],
-    "infrastructure": ["server", "network", "home", "lights", "blinds"],
-}
+
+def load_domain_keywords():
+    """Loads domain keywords from config file, falling back to defaults."""
+    if os.path.exists(CONFIG_PATH):
+        with open(CONFIG_PATH, 'r') as f:
+            return json.load(f)
+    return DEFAULT_KEYWORDS
 
 
 def _word_match(keyword, text):
@@ -15,12 +20,14 @@ def _word_match(keyword, text):
     return bool(re.search(r'\b' + re.escape(keyword) + r'\b', text))
 
 
-def get_relevant_domains(message):
+def get_relevant_domains(message, domain_keywords=None):
     """Determines which memory domains to inject based on message intent."""
+    if domain_keywords is None:
+        domain_keywords = load_domain_keywords()
     msg = message.lower()
     domains = [
         domain
-        for domain, keywords in DOMAIN_KEYWORDS.items()
+        for domain, keywords in domain_keywords.items()
         if any(_word_match(k, msg) for k in keywords)
     ]
     return domains if domains else [GENERAL_DOMAIN]
