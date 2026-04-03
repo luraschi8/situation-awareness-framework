@@ -51,7 +51,7 @@ Every message flows through this sequence:
 
 1. **HEARTBEAT Step 0 (Temporal Awareness)** — Mandatory sync with system clock. Determines timezone, day phase (`MORNING_PRIME`, `NIGHT_WATCH`, etc.), and day type (workday/weekend). The LLM never generates temporal context — only the physical clock is trusted.
 2. **Layer 0 Security (Deterministic)** — `crypto_engine.py` and `security.py` validate message envelopes (HMAC-SHA256 signatures, 30-second replay window, sender identity) before any LLM processing. This is non-negotiable code-level validation.
-3. **Intent Routing** — `intent_router.py` / `router.py` classify the message into domains (work, family, projects, infrastructure) to select which memory fragments to inject into context.
+3. **Intent Routing** — `router.py` classifies the message into domains (work, family, projects, infrastructure) via keyword matching to select which memory fragments to inject into context.
 4. **Deduplication** — `ledger.py` and `coordinator.py` check `daily-actions.json` and `collective-ledger.json` to prevent duplicate proactive actions across restarts and across agents.
 5. **Relevance Gate** — `relevance.py` filters proactive tasks against user state (location, mode, overrides like vacation).
 
