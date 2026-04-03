@@ -6,7 +6,7 @@ LEDGER_PATH = "memory/shared/collective-ledger.json"
 
 def sync_action(agent_id, action_id, context=None):
     """
-    Registra una acción en el Ledger Global para evitar redundancia inter-agentes.
+    Records an action in the Global Ledger to prevent inter-agent redundancy.
     """
     os.makedirs(os.path.dirname(LEDGER_PATH), exist_ok=True)
     ledger = {"last_updated": "", "actions": {}}

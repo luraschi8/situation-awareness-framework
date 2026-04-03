@@ -1,9 +1,7 @@
 import unittest
 import os
 import json
-import sys
-sys.path.append('skills/saf-core/lib')
-from ledger import sync_action
+from skills.saf_core.lib.ledger import sync_action
 
 class TestLedger(unittest.TestCase):
     def setUp(self):

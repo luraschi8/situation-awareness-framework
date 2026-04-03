@@ -8,8 +8,8 @@ KEY_PATH = "memory/shared/trusted-agents.json"
 MY_IDENTITY_PATH = "memory/shared/my-identity.json"
 
 def generate_keys(agent_id):
-    """Genera una identidad única para el agente."""
-    # En producción usaría Ed25519. Aquí simulamos con un secreto fuerte.
+    """Generates a unique identity for the agent."""
+    # Production would use Ed25519. Here we simulate with a strong secret.
     secret = os.urandom(32).hex()
     identity = {
         "agent_id": agent_id,
@@ -22,13 +22,13 @@ def generate_keys(agent_id):
     return identity["public_key"]
 
 def sign_message(body, private_key):
-    """Firma un mensaje usando HMAC-SHA256 (Determinístico)."""
+    """Signs a message using HMAC-SHA256 (Deterministic)."""
     return hmac.new(private_key.encode(), body.encode(), hashlib.sha256).hexdigest()
 
 def verify_envelope(envelope):
     """
-    CAPA 0: VERIFICACIÓN EXTREMA.
-    Valida: Firma, Timestamp (ventana 30s) y Nonce (Replay Attack).
+    LAYER 0: EXTREME VERIFICATION.
+    Validates: Signature, Timestamp (30s window) and Nonce (Replay Attack).
     """
     try:
         sender_id = envelope['sender_id']
@@ -36,12 +36,12 @@ def verify_envelope(envelope):
         signature = envelope['signature']
         timestamp = envelope['timestamp']
         
-        # 1. Chequeo de Ventana Temporal (Anti-Stale)
+        # 1. Temporal Window Check (Anti-Stale)
         now = time.time()
         if abs(now - timestamp) > 30:
             return False, "Message expired (Temporal Drift)"
             
-        # 2. Cargar Clave Pública del Remitente
+        # 2. Load Sender's Public Key
         if not os.path.exists(KEY_PATH):
             return False, "Trusted registry missing"
             
@@ -51,12 +51,12 @@ def verify_envelope(envelope):
         if sender_id not in trusted:
             return False, f"Unknown Agent: {sender_id}"
             
-        # 3. Verificación Matemática (No LLM)
-        # Re-calculamos la firma esperada usando la Public Key (que actúa como secreto compartido en este mock)
+        # 3. Mathematical Verification (No LLM)
+        # Recalculate expected signature using the Public Key (acts as shared secret in this mock)
         expected = sign_message(msg_body, trusted[sender_id]['public_key'])
         
         if not hmac.compare_digest(expected, signature):
-            return False, "Criptographic Mismatch (Possible Tampering)"
+            return False, "Cryptographic Mismatch (Possible Tampering)"
             
         return True, "Verified"
     except Exception as e:
