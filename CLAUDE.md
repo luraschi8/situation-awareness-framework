@@ -23,6 +23,18 @@ python3 -m unittest tests.test_temporal_v31
 
 Tests import from the `skills.saf_core.lib` package. All tests should pass.
 
+## Testing Conventions
+
+Every module and feature must include unit tests as part of its implementation — tests are not a separate phase.
+
+- **Framework:** `unittest.TestCase` — no external test dependencies
+- **File naming:** `tests/test_<module>.py`
+- **Isolation:** Each test must be runnable independently: `python3 -m unittest tests.test_<module>`
+- **No shared state:** Tests must not depend on state from other tests. Use `setUp()` / `tearDown()` to create and clean up any files, directories, or state
+- **Temporary files:** Use `tempfile` or dedicated test directories for file-based tests to avoid polluting the repo. Clean up in `tearDown()`
+- **Discovery:** All tests must be discoverable via `python3 -m unittest discover tests`
+- **Assertions only:** Never print pass/fail status manually — rely on `unittest` assertions so the test runner accurately reports results
+
 ## Bootstrap
 
 ```bash
