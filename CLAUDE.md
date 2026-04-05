@@ -48,18 +48,32 @@ Creates the `memory/domains/` directory structure with archetype-based domain fo
 
 ### Processing Pipeline
 
-Every message flows through this sequence:
+Orchestrated by `skills/saf_core/lib/pipeline.py`. See `docs/ARCHITECTURE.md` for the full walkthrough.
 
-1. **HEARTBEAT Step 0 (Temporal Awareness)** — `temporal.py` syncs with the system clock. Resolves user timezone, day phase (`MORNING`, `AFTERNOON`, `EVENING`, `NIGHT`, `NIGHT_LATE`), and day type (workday/rest_day). Configuration in `memory/shared/user-state.json` — timezone, work days, and phase boundaries are all configurable. The LLM never generates temporal context.
-2. **Layer 0 Security (Deterministic)** — `crypto_engine.py` and `security.py` validate message envelopes (HMAC-SHA256 signatures, 30-second replay window, sender identity) before any LLM processing. This is non-negotiable code-level validation.
-3. **Intent Routing** — `router.py` classifies the message into domains (work, family, projects, infrastructure) via keyword matching to select which memory fragments to inject into context.
-4. **Deduplication** — `ledger.py` and `coordinator.py` check `daily-actions.json` and `collective-ledger.json` to prevent duplicate proactive actions across restarts and across agents.
-5. **Relevance Gate** — `relevance.py` filters proactive tasks against user state (location, mode, overrides like vacation).
+**Deterministic steps (run in `saf_core.pipeline`, no LLM calls):**
+
+0. **Temporal Gate** — `temporal.py` syncs with system clock. Resolves timezone, day phase, day type. Configured via `memory/shared/user-state.json`.
+1. **Dedup Lookup** — `ledger.py::get_today_actions()` reads `memory/shared/collective-ledger.json`.
+2. **Domain Routing** — `router.py::get_relevant_domains()` regex-matches message against `memory/shared/router-config.json`.
+3. **Relevance Gate** — `relevance.py` + pipeline rules produce blocked_actions.
+
+**Agentic steps (run in the agent runtime):**
+
+4. **Domain Loading** — Agent reads the files SAF pointed to, using its own Read tool or sub-agents.
+5. **Reasoning** — Agent's LLM processes loaded context + user message.
+
+**Deterministic again:**
+
+6. **Ledger Write** — Adapter parses `<saf-action id="..." status="..."/>` tags from response, calls `pipeline.record_action()`.
+
+The entire framework is accessible through two functions: `pipeline.process(message, host)` and `pipeline.record_action(id, status, host)`. Framework adapters (`saf_openclaw`, future `saf_langchain`, etc.) implement the `SAFHost` and `SAFAdapter` protocols to bridge SAF into their framework's lifecycle events.
 
 ### Key Directories
 
-- `skills/saf_core/lib/` — Core Python modules (proper package with `__init__.py`)
-- `templates/` — Deployment artifacts: `HEARTBEAT.md` (core loop instructions), `daily-actions.json` (ledger template), `saf-init` (bootstrap)
+- `skills/saf_core/lib/` — Framework-agnostic core. Pipeline, protocols, deterministic steps. **Never imports from any framework.**
+- `skills/saf_openclaw/` — OpenClaw reference adapter. Hooks, renderer, install script.
+- `templates/` — Bootstrap artifacts: `HEARTBEAT.md`, `daily-actions.json`, `saf-init`
+- `docs/` — Architecture and adapter author guide
 - `tests/` — Unit tests using `unittest`
 
 ### Core Design Principles
@@ -79,7 +93,12 @@ Cryptographic identity system aligned with W3C DIDs, Google A2A envelope pattern
 
 ## Documentation Map
 
-- `ARCH_SPEC.md` — State machine logic, validation rules, day phase definitions
+**Start here:**
+- `docs/ARCHITECTURE.md` — The north star. How SAF is designed and why. Deterministic vs agentic boundary, pipeline steps, integration model. **Read this first.**
+- `docs/ADAPTERS.md` — How to write a SAF adapter for any agentic framework. Includes a LangChain walkthrough.
+
+**Historical specs (kept for context, some features are future work):**
+- `ARCH_SPEC.md` — Original state machine logic, validation rules, day phase definitions
 - `SAF_V3_COORDINATOR_SPEC.md` — Coordinator era architecture, lead agent protocol, compute pyramid
 - `SAF_V4_EX_BLUEPRINT.md` — SAF-EX interoperability protocol, cognitive immunity
 - `CRYPTO_SPEC.md` — Cryptographic protocols, threat model, standards alignment
