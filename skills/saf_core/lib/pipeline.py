@@ -14,21 +14,22 @@ Architectural guarantees enforced by this module:
 import os
 from typing import List
 
-from skills.saf_core.lib import ledger, paths, router, temporal
-from skills.saf_core.lib.context import DomainCandidate, SAFContext
+from skills.saf_core.lib import actions, ledger, paths, router, temporal
+from skills.saf_core.lib.context import DomainCandidate, ProactiveAction, SAFContext
 from skills.saf_core.lib.host import SAFHost
 
 SAF_AGENT_ID = "saf"
 
 
 def process(message: str, host: SAFHost) -> SAFContext:
-    """Runs Steps 0-3 of the SAF pipeline and returns the full SAFContext.
+    """Runs Steps 0-4 of the SAF pipeline and returns the full SAFContext.
 
     Steps:
       0. Temporal context (system clock + user-state.json)
-      1. Dedup lookup (read collective-ledger.json)
-      2. Domain routing (regex match against router-config.json)
-      3. Relevance gate (apply rules to compute blocked actions)
+      1. Action evaluation (filter registry by trigger conditions)
+      2. Dedup lookup (frequency-aware, read collective-ledger.json)
+      3. Domain routing (merge message-matched + action-sourced domains)
+      4. Relevance gate (compute blocked + available actions)
 
     Returns a SAFContext the adapter renders for the agent.
     """
@@ -36,38 +37,64 @@ def process(message: str, host: SAFHost) -> SAFContext:
 
     # Step 0: temporal
     temporal_ctx = temporal.get_temporal_context()
+    today_iso = temporal_ctx["iso_date"]
 
-    # Step 1: dedup lookup (aligned to user's local date, not UTC)
+    # Step 1: action evaluation — which registry actions apply right now?
+    applicable = actions.get_applicable_actions(temporal_ctx, workspace)
+
+    # Step 2: dedup lookup — single ledger read shared across all checks
+    ledger_data = ledger._load_ledger(workspace)
     dedup = ledger.get_today_actions(
         workspace_root=workspace,
-        today_iso=temporal_ctx["iso_date"],
+        today_iso=today_iso,
     )
 
-    # Step 2: domain routing
-    domain_names = router.get_relevant_domains(message)
-    candidate_domains = _resolve_domain_files(domain_names, message, workspace, host)
+    # Step 3: partition applicable actions into available vs blocked
+    available: List[ProactiveAction] = []
+    blocked: dict = {}
 
-    # Step 3: relevance gate — compute blocked actions
-    blocked = _compute_blocked_actions(dedup)
+    for action in applicable:
+        if ledger.is_action_done(action.id, action.frequency,
+                                 today_iso=today_iso, _ledger=ledger_data):
+            blocked[action.id] = f"already_done_{action.frequency}"
+        else:
+            available.append(action)
 
-    instructions = _build_instructions(candidate_domains, blocked)
+    # Also block anything in today's ledger not already covered (ad-hoc actions)
+    for action_id in dedup.get("already_done_today", []):
+        if action_id not in blocked:
+            blocked[action_id] = "already_done_today"
+
+    # Step 4: domain routing — union message-matched + action-sourced domains
+    message_domains = router.get_relevant_domains(message)
+    action_domains = [d for a in available for d in a.domains]
+    all_domain_names = list(dict.fromkeys(message_domains + action_domains))
+
+    candidate_domains = _resolve_domain_files(
+        all_domain_names, message, workspace, host,
+    )
+
+    instructions = _build_instructions(candidate_domains, blocked, available)
 
     return SAFContext(
         temporal=temporal_ctx,
         dedup=dedup,
         candidate_domains=candidate_domains,
         blocked_actions=blocked,
+        available_actions=available,
         agent_instructions=instructions,
     )
 
 
-def record_action(action_id: str, status: str, host: SAFHost) -> None:
+def record_action(action_id: str, status: str, host: SAFHost,
+                   origin: str = None) -> None:
     """Step 6: persist an executed action to the ledger."""
     ledger.sync_action(
         agent_id=SAF_AGENT_ID,
         action_id=action_id,
         context={"status": status},
         workspace_root=host.workspace_root(),
+        origin=origin,
     )
 
 
@@ -113,22 +140,10 @@ def _describe_match(message: str) -> str:
     return f'"{snippet}"' if snippet else "(empty message)"
 
 
-def _compute_blocked_actions(dedup: dict) -> dict:
-    """Computes which actions must not be executed this turn.
-
-    Today: blocks anything already in the ledger for today.
-    Future: will also consult the relevance gate (#9) and behavioral
-    regressions (#10).
-    """
-    return {
-        action_id: "already_done_today"
-        for action_id in dedup.get("already_done_today", [])
-    }
-
-
 def _build_instructions(
     candidates: List[DomainCandidate],
     blocked: dict,
+    available: List[ProactiveAction],
 ) -> List[str]:
     """Composes human-readable instructions for the agent."""
     instructions: List[str] = []
@@ -144,6 +159,12 @@ def _build_instructions(
     else:
         instructions.append(
             "No specific domains matched this message — rely on general conversational context."
+        )
+
+    if available:
+        action_list = ", ".join(a.id for a in available)
+        instructions.append(
+            f"Available proactive actions you may execute: {action_list}."
         )
 
     if blocked:

@@ -5,6 +5,21 @@ from typing import Any, Dict, List
 
 
 @dataclass(frozen=True)
+class ProactiveAction:
+    """A proactive action the agent could execute right now.
+
+    Built from the proactive-actions.json registry, filtered by trigger
+    conditions in the current temporal context.
+    """
+
+    id: str
+    description: str
+    domains: List[str] = field(default_factory=list)
+    frequency: str = "daily"
+    requires_trigger: str = ""
+
+
+@dataclass(frozen=True)
 class DomainCandidate:
     """A domain SAF identified as relevant for the current turn.
 
@@ -31,4 +46,5 @@ class SAFContext:
     dedup: Dict[str, List[str]]
     candidate_domains: List[DomainCandidate] = field(default_factory=list)
     blocked_actions: Dict[str, str] = field(default_factory=dict)
+    available_actions: List[ProactiveAction] = field(default_factory=list)
     agent_instructions: List[str] = field(default_factory=list)

@@ -22,6 +22,7 @@ def render_briefing(context: SAFContext) -> str:
         HEADER,
         _render_temporal(context),
         _render_domains(context),
+        _render_available_actions(context),
         _render_already_done(context),
         _render_blocked(context),
         _render_instructions(context),
@@ -59,11 +60,27 @@ def _render_domains(ctx: SAFContext) -> str:
     return "\n".join(lines)
 
 
+def _render_available_actions(ctx: SAFContext) -> str:
+    if not ctx.available_actions:
+        return "## 3. Available Proactive Actions\n_None right now._\n"
+    lines = ["## 3. Available Proactive Actions", ""]
+    for action in ctx.available_actions:
+        trigger_note = (
+            f" *(requires: {action.requires_trigger})*"
+            if action.requires_trigger else ""
+        )
+        lines.append(f"- **{action.id}**: {action.description}{trigger_note}")
+        if action.domains:
+            lines.append(f"  - Domains: {', '.join(action.domains)}")
+    lines.append("")
+    return "\n".join(lines)
+
+
 def _render_already_done(ctx: SAFContext) -> str:
     done = ctx.dedup.get("already_done_today", [])
     if not done:
-        return "## 3. Already Done Today\n_Nothing yet._\n"
-    lines = ["## 3. Already Done Today (do not repeat)"]
+        return "## 4. Already Done Today\n_Nothing yet._\n"
+    lines = ["## 4. Already Done Today (do not repeat)"]
     for action_id in done:
         lines.append(f"- `{action_id}`")
     lines.append("")
@@ -72,8 +89,8 @@ def _render_already_done(ctx: SAFContext) -> str:
 
 def _render_blocked(ctx: SAFContext) -> str:
     if not ctx.blocked_actions:
-        return "## 4. Blocked Actions\n_None._\n"
-    lines = ["## 4. Blocked Actions (do not execute)"]
+        return "## 5. Blocked Actions\n_None._\n"
+    lines = ["## 5. Blocked Actions (do not execute)"]
     for action_id, reason in ctx.blocked_actions.items():
         lines.append(f"- `{action_id}` — reason: {reason}")
     lines.append("")
@@ -88,8 +105,8 @@ def _render_instructions(ctx: SAFContext) -> str:
     the pipeline's output.
     """
     if not ctx.agent_instructions:
-        return "## 5. Instructions\n_No specific instructions._\n"
-    lines = ["## 5. Instructions"]
+        return "## 6. Instructions\n_No specific instructions._\n"
+    lines = ["## 6. Instructions"]
     for i, instruction in enumerate(ctx.agent_instructions, start=1):
         lines.append(f"{i}. {instruction}")
     lines.append("")

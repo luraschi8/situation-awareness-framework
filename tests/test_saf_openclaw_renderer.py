@@ -2,7 +2,7 @@
 
 import unittest
 
-from skills.saf_core.lib.context import DomainCandidate, SAFContext
+from skills.saf_core.lib.context import DomainCandidate, ProactiveAction, SAFContext
 from skills.saf_openclaw.renderer import render_briefing
 
 
@@ -16,19 +16,21 @@ def _sample_temporal():
         "day_of_week": "Sunday",
         "day_type": "rest_day",
         "iso_date": "2026-04-05",
+        "weekday_number": 6,
     }
 
 
 class TestRenderBriefing(unittest.TestCase):
 
-    def test_contains_all_five_section_headers(self):
+    def test_contains_all_six_section_headers(self):
         ctx = SAFContext(temporal=_sample_temporal(), dedup={})
         out = render_briefing(ctx)
         self.assertIn("## 1. Temporal Context", out)
         self.assertIn("## 2. Relevant Domains", out)
-        self.assertIn("## 3. Already Done Today", out)
-        self.assertIn("## 4. Blocked Actions", out)
-        self.assertIn("## 5. Instructions", out)
+        self.assertIn("## 3. Available Proactive Actions", out)
+        self.assertIn("## 4. Already Done Today", out)
+        self.assertIn("## 5. Blocked Actions", out)
+        self.assertIn("## 6. Instructions", out)
 
     def test_temporal_section_renders_all_fields(self):
         ctx = SAFContext(temporal=_sample_temporal(), dedup={})
@@ -62,6 +64,44 @@ class TestRenderBriefing(unittest.TestCase):
         ctx = SAFContext(temporal=_sample_temporal(), dedup={})
         out = render_briefing(ctx)
         self.assertIn("No specific domains matched", out)
+
+    def test_available_actions_renders_description_and_domains(self):
+        ctx = SAFContext(
+            temporal=_sample_temporal(),
+            dedup={},
+            available_actions=[
+                ProactiveAction(
+                    id="morning_briefing",
+                    description="Summarize today's schedule",
+                    domains=["work", "projects"],
+                    frequency="daily",
+                ),
+            ],
+        )
+        out = render_briefing(ctx)
+        self.assertIn("morning_briefing", out)
+        self.assertIn("Summarize today's schedule", out)
+        self.assertIn("work, projects", out)
+
+    def test_available_actions_shows_requires_trigger(self):
+        ctx = SAFContext(
+            temporal=_sample_temporal(),
+            dedup={},
+            available_actions=[
+                ProactiveAction(
+                    id="meeting_prep",
+                    description="Prepare for meeting",
+                    requires_trigger="calendar_event",
+                ),
+            ],
+        )
+        out = render_briefing(ctx)
+        self.assertIn("requires: calendar_event", out)
+
+    def test_empty_available_actions_says_none(self):
+        ctx = SAFContext(temporal=_sample_temporal(), dedup={})
+        out = render_briefing(ctx)
+        self.assertIn("None right now", out)
 
     def test_already_done_section_lists_actions(self):
         ctx = SAFContext(

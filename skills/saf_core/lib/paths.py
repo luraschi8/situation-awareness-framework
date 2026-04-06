@@ -12,6 +12,7 @@ SHARED_DIR = os.path.join(MEMORY_DIR, "shared")
 RUNTIME_DIR = os.path.join(SHARED_DIR, "runtime")
 
 LEDGER_FILE = os.path.join(SHARED_DIR, "collective-ledger.json")
+PROACTIVE_ACTIONS_FILE = os.path.join(SHARED_DIR, "proactive-actions.json")
 ROUTER_CONFIG_FILE = os.path.join(SHARED_DIR, "router-config.json")
 USER_STATE_FILE = os.path.join(SHARED_DIR, "user-state.json")
 BRIEFING_FILE = os.path.join(RUNTIME_DIR, "SAF_BRIEFING.md")

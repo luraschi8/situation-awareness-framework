@@ -71,7 +71,7 @@ class TestAdapterLifecycle(_AdapterFixture):
         with open(path) as f:
             content = f.read()
         self.assertIn("## 1. Temporal Context", content)
-        self.assertIn("## 5. Instructions", content)
+        self.assertIn("## 6. Instructions", content)
 
     def test_write_briefing_is_atomic(self):
         # Write twice, verify no .tmp file is left behind

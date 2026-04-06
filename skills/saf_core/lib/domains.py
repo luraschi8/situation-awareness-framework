@@ -32,5 +32,41 @@ ARCHETYPE_KEYWORDS = {
     },
 }
 
+ARCHETYPE_ACTIONS = {
+    "professional": {
+        "morning_briefing": {
+            "description": "Summarize today's schedule, priorities, and pending items",
+            "trigger": {"phase": ["MORNING"], "day_type": "workday"},
+            "frequency": "daily",
+            "domains": ["work", "projects"],
+            "enabled": True,
+        },
+        "weekly_review": {
+            "description": "Review the week's accomplishments and plan next week",
+            "trigger": {"phase": ["MORNING"], "day_of_week": [0]},
+            "frequency": "weekly",
+            "domains": ["work", "projects"],
+            "enabled": True,
+        },
+    },
+    "family": {
+        "morning_briefing": {
+            "description": "Summarize today's family schedule and household tasks",
+            "trigger": {"phase": ["MORNING"]},
+            "frequency": "daily",
+            "domains": ["family", "home"],
+            "enabled": True,
+        },
+        "weekly_meal_plan": {
+            "description": "Plan meals for the upcoming week",
+            "trigger": {"phase": ["MORNING"], "day_of_week": [6]},
+            "frequency": "weekly",
+            "domains": ["home"],
+            "enabled": True,
+        },
+    },
+}
+
 DEFAULT_ARCHETYPE = "professional"
 DEFAULT_KEYWORDS = ARCHETYPE_KEYWORDS[DEFAULT_ARCHETYPE]
+DEFAULT_ACTIONS = ARCHETYPE_ACTIONS[DEFAULT_ARCHETYPE]

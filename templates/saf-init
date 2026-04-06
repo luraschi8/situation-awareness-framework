@@ -7,12 +7,14 @@ from datetime import datetime, timezone
 # Allow imports from the project root
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from skills.saf_core.lib.domains import (
+    ARCHETYPE_ACTIONS,
     ARCHETYPE_KEYWORDS,
     CONFIG_PATH,
     DEFAULT_PHASES,
     DEFAULT_WORK_DAYS,
     USER_STATE_PATH,
 )
+from skills.saf_core.lib import paths
 
 DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
@@ -73,9 +75,11 @@ def bootstrap():
     if choice == "1":
         domains = ["Work", "Projects", "Infrastructure"]
         router_keywords = ARCHETYPE_KEYWORDS["professional"]
+        proactive_actions = ARCHETYPE_ACTIONS["professional"]
     elif choice == "2":
         domains = ["Family", "Home", "Health"]
         router_keywords = ARCHETYPE_KEYWORDS["family"]
+        proactive_actions = ARCHETYPE_ACTIONS["family"]
     elif choice == "3":
         raw = input("Enter domain names separated by commas: ").strip()
         domains = [d.strip() for d in raw.split(",") if d.strip()]
@@ -83,6 +87,7 @@ def bootstrap():
             print("No domains provided. Aborting.")
             return
         router_keywords = {d.lower(): [] for d in domains}
+        proactive_actions = {}
         print("Note: Custom domains have empty keyword lists.")
         print(f"Edit {CONFIG_PATH} to add keywords.")
     else:
@@ -125,6 +130,15 @@ def bootstrap():
         with open(USER_STATE_PATH, 'w') as f:
             json.dump(user_state, f, indent=2)
         print(f"User state written to {USER_STATE_PATH}")
+
+    # --- Create proactive actions registry (skip if exists) ---
+    actions_path = paths.resolve(paths.PROACTIVE_ACTIONS_FILE)
+    if os.path.exists(actions_path):
+        print(f"Proactive actions already exist at {actions_path}, skipping.")
+    else:
+        with open(actions_path, 'w') as f:
+            json.dump({"actions": proactive_actions}, f, indent=2)
+        print(f"Proactive actions written to {actions_path}")
 
     print(f"\nSAF structure created with domains: {', '.join(domains)}")
     print(f"Timezone: {user_timezone}")

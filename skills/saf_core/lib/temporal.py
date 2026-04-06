@@ -63,4 +63,5 @@ def get_temporal_context(_now_override=None):
         "day_of_week": local_now.strftime("%A"),
         "day_type": "workday" if local_now.weekday() in user_state["work_days"] else "rest_day",
         "iso_date": local_now.strftime("%Y-%m-%d"),
+        "weekday_number": local_now.weekday(),
     }

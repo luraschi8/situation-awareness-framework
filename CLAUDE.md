@@ -85,7 +85,7 @@ The entire framework is accessible through two functions: `pipeline.process(mess
 
 ### Multi-Agent Coordination (v3+)
 
-The Coordinator (`coordinator.py`) maintains a global `collective-ledger.json` for cross-agent deduplication. A lead agent (Jarvis) holds the SAF as single source of truth and delegates domain fragments to sub-agents.
+Cross-agent deduplication uses `collective-ledger.json` (managed by `ledger.py`). A lead agent (Jarvis) holds the SAF as single source of truth and delegates domain fragments to sub-agents. Full multi-agent coordination is tracked in #13.
 
 ### External Interoperability (v4 / SAF-EX)
 

@@ -26,6 +26,8 @@ import tempfile
 import unittest
 
 from skills.saf_core.lib import paths
+from unittest.mock import patch
+
 from skills.saf_core.lib.domains import (
     ARCHETYPE_KEYWORDS,
     DEFAULT_PHASES,
@@ -47,10 +49,18 @@ class _Workspace:
         self.archetype = archetype
         self.timezone = timezone
 
-    def build(self):
+    def build(self, proactive_actions=None):
         self._write_user_state()
         self._write_router_config()
         self._write_domains()
+        if proactive_actions is not None:
+            self._write_proactive_actions(proactive_actions)
+
+    def _write_proactive_actions(self, actions_dict):
+        path = os.path.join(self.root, paths.PROACTIVE_ACTIONS_FILE)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            json.dump({"actions": actions_dict}, f)
 
     def _write_user_state(self):
         path = os.path.join(self.root, paths.USER_STATE_FILE)
@@ -166,10 +176,11 @@ class TestFreshSessionBootstrap(_IntegrationFixture):
         self.assertIn("## 1. Temporal Context", briefing)
         self.assertIn("UTC", briefing)
         self.assertIn("## 2. Relevant Domains", briefing)
-        self.assertIn("## 3. Already Done Today", briefing)
+        self.assertIn("## 3. Available Proactive Actions", briefing)
+        self.assertIn("## 4. Already Done Today", briefing)
         self.assertIn("Nothing yet", briefing)
-        self.assertIn("## 4. Blocked Actions", briefing)
-        self.assertIn("## 5. Instructions", briefing)
+        self.assertIn("## 5. Blocked Actions", briefing)
+        self.assertIn("## 6. Instructions", briefing)
 
     def test_bootstrap_has_no_candidate_domains(self):
         ctx = self.adapter.on_bootstrap()
@@ -206,7 +217,7 @@ class TestMultiTurnDedup(_IntegrationFixture):
         briefing = agent.last_briefing
 
         # The blocked-actions section should list the action
-        self.assertIn("## 4. Blocked Actions (do not execute)", briefing)
+        self.assertIn("## 5. Blocked Actions (do not execute)", briefing)
         self.assertIn("morning_briefing", briefing)
         self.assertIn("already_done_today", briefing)
 
@@ -385,6 +396,106 @@ class TestArchitecturalBoundaries(_IntegrationFixture):
         ctx = self.adapter.on_bootstrap()
         with self.assertRaises(Exception):
             ctx.temporal = {}  # type: ignore
+
+
+def _morning_workday_patch():
+    """Returns a patch that makes temporal return a consistent MORNING/workday."""
+    return patch(
+        "skills.saf_core.lib.temporal.get_temporal_context",
+        return_value={
+            "utc_time": "2026-04-06T08:00:00+00:00",
+            "timezone": "UTC",
+            "local_time": "2026-04-06T08:00:00+00:00",
+            "hour": 8,
+            "day_phase": "MORNING",
+            "day_of_week": "Monday",
+            "day_type": "workday",
+            "iso_date": "2026-04-06",
+            "weekday_number": 0,
+        },
+    )
+
+
+class TestProactiveActionLifecycle(unittest.TestCase):
+    """Integration tests for the full proactive action lifecycle:
+    registry → pipeline → briefing → execution → dedup."""
+
+    REGISTRY = {
+        "morning_briefing": {
+            "description": "Summarize today's schedule",
+            "trigger": {"phase": ["MORNING"], "day_type": "workday"},
+            "frequency": "daily",
+            "domains": ["work"],
+            "enabled": True,
+        },
+        "weekly_review": {
+            "description": "Review the week",
+            "trigger": {"phase": ["MORNING"], "day_of_week": [0]},
+            "frequency": "weekly",
+            "domains": ["work", "projects"],
+            "enabled": True,
+        },
+    }
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.workspace = _Workspace(self.tmpdir, archetype="professional")
+        self.workspace.build(proactive_actions=self.REGISTRY)
+        self.host = OpenClawHost(workspace_root=self.tmpdir)
+        self.adapter = OpenClawAdapter(host=self.host)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def new_agent(self):
+        return _MockAgent(self.adapter)
+
+    def test_registry_action_appears_in_briefing(self):
+        agent = self.new_agent()
+        with _morning_workday_patch():
+            briefing = agent.receive_message("hello")
+        self.assertIn("## 3. Available Proactive Actions", briefing)
+        self.assertIn("morning_briefing", briefing)
+        self.assertIn("Summarize today's schedule", briefing)
+
+    def test_registry_action_blocked_after_execution(self):
+        agent = self.new_agent()
+        with _morning_workday_patch():
+            agent.receive_message("hello")
+            agent.respond_with_action("morning_briefing", "sent")
+
+            # Turn 2: morning_briefing should be blocked
+            ctx = self.adapter.on_pre_message("anything")
+        self.assertIn("morning_briefing", ctx.blocked_actions)
+        self.assertEqual(
+            ctx.blocked_actions["morning_briefing"], "already_done_daily",
+        )
+        # Should not appear in available_actions
+        available_ids = [a.id for a in ctx.available_actions]
+        self.assertNotIn("morning_briefing", available_ids)
+
+    def test_weekly_action_stays_blocked_within_week(self):
+        agent = self.new_agent()
+        with _morning_workday_patch():
+            agent.receive_message("hello")
+            agent.respond_with_action("weekly_review", "sent")
+
+            # Same day, weekly_review should still be blocked
+            ctx = self.adapter.on_pre_message("anything")
+        self.assertIn("weekly_review", ctx.blocked_actions)
+        self.assertEqual(
+            ctx.blocked_actions["weekly_review"], "already_done_weekly",
+        )
+
+    def test_action_domains_surfaced_even_without_keyword_match(self):
+        """Available actions should inject their domains into the briefing
+        even if the user message doesn't match those domains by keyword."""
+        agent = self.new_agent()
+        with _morning_workday_patch():
+            # "hello" matches no router keywords, but morning_briefing
+            # has domains=["work"] which should appear
+            briefing = agent.receive_message("hello")
+        self.assertIn("**work**", briefing)
 
 
 if __name__ == "__main__":

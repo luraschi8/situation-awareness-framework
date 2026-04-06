@@ -146,6 +146,141 @@ class TestPipelineProcess(_WorkspaceFixture):
         self.assertNotIn("_index.md", work.files)
 
 
+class TestPipelineProactiveActions(_WorkspaceFixture):
+    """Tests for proactive action registry integration in the pipeline."""
+
+    def _write_registry(self, actions_dict):
+        self.write_config("proactive-actions.json", {"actions": actions_dict})
+
+    def _morning_workday_context(self):
+        """Patch temporal to return a consistent MORNING/workday context."""
+        return patch(
+            "skills.saf_core.lib.temporal.get_temporal_context",
+            return_value={
+                "utc_time": "2026-04-06T08:00:00+00:00",
+                "timezone": "UTC",
+                "local_time": "2026-04-06T08:00:00+00:00",
+                "hour": 8,
+                "day_phase": "MORNING",
+                "day_of_week": "Monday",
+                "day_type": "workday",
+                "iso_date": "2026-04-06",
+                "weekday_number": 0,
+            },
+        )
+
+    def test_available_actions_populated_from_registry(self):
+        self._write_registry({
+            "morning_briefing": {
+                "description": "Summarize the day",
+                "trigger": {"phase": ["MORNING"], "day_type": "workday"},
+                "frequency": "daily",
+                "domains": ["work"],
+                "enabled": True,
+            }
+        })
+        with self._morning_workday_context():
+            ctx = pipeline.process("Hello", self.host)
+        self.assertEqual(len(ctx.available_actions), 1)
+        self.assertEqual(ctx.available_actions[0].id, "morning_briefing")
+
+    def test_available_actions_empty_when_no_registry(self):
+        with self._morning_workday_context():
+            ctx = pipeline.process("Hello", self.host)
+        self.assertEqual(ctx.available_actions, [])
+
+    def test_done_action_moves_to_blocked(self):
+        self._write_registry({
+            "morning_briefing": {
+                "description": "Summarize the day",
+                "trigger": {"phase": ["MORNING"], "day_type": "workday"},
+                "frequency": "daily",
+                "domains": ["work"],
+                "enabled": True,
+            }
+        })
+        self.write_config("collective-ledger.json", {
+            "last_updated": "2026-04-06T07:00:00Z",
+            "actions": {
+                "morning_briefing": {
+                    "agent": "saf",
+                    "timestamp": "2026-04-06T07:00:00Z",
+                    "context": {"status": "sent"},
+                }
+            },
+        })
+        with self._morning_workday_context():
+            ctx = pipeline.process("Hello", self.host)
+        self.assertEqual(ctx.available_actions, [])
+        self.assertIn("morning_briefing", ctx.blocked_actions)
+        self.assertEqual(
+            ctx.blocked_actions["morning_briefing"], "already_done_daily",
+        )
+
+    def test_weekly_action_blocked_when_done_this_week(self):
+        self._write_registry({
+            "weekly_review": {
+                "description": "Weekly review",
+                "trigger": {"phase": ["MORNING"], "day_of_week": [0]},
+                "frequency": "weekly",
+                "domains": ["work"],
+                "enabled": True,
+            }
+        })
+        # Done earlier this week (same ISO week as 2026-04-06)
+        self.write_config("collective-ledger.json", {
+            "last_updated": "2026-04-06T07:00:00Z",
+            "actions": {
+                "weekly_review": {
+                    "agent": "saf",
+                    "timestamp": "2026-04-06T07:00:00Z",
+                    "context": {"status": "sent"},
+                }
+            },
+        })
+        with self._morning_workday_context():
+            ctx = pipeline.process("Hello", self.host)
+        self.assertEqual(ctx.available_actions, [])
+        self.assertIn("weekly_review", ctx.blocked_actions)
+        self.assertEqual(
+            ctx.blocked_actions["weekly_review"], "already_done_weekly",
+        )
+
+    def test_action_domains_merged_with_message_domains(self):
+        self.create_domain("work", ["setup.md"])
+        self.create_domain("projects", ["roadmap.md"])
+        self._write_registry({
+            "morning_briefing": {
+                "description": "Briefing",
+                "trigger": {"phase": ["MORNING"]},
+                "frequency": "daily",
+                "domains": ["projects"],
+                "enabled": True,
+            }
+        })
+        with self._morning_workday_context():
+            # "meeting" triggers the "work" domain via message routing
+            ctx = pipeline.process("I have a meeting", self.host)
+        domain_names = [c.name for c in ctx.candidate_domains]
+        self.assertIn("work", domain_names)
+        self.assertIn("projects", domain_names)
+
+    def test_instructions_mention_available_actions(self):
+        self._write_registry({
+            "morning_briefing": {
+                "description": "Briefing",
+                "trigger": {"phase": ["MORNING"]},
+                "frequency": "daily",
+                "enabled": True,
+            }
+        })
+        with self._morning_workday_context():
+            ctx = pipeline.process("Hello", self.host)
+        joined = "\n".join(ctx.agent_instructions)
+        self.assertIn("morning_briefing", joined)
+        self.assertIn("Available proactive actions", joined)
+
+
 class TestPipelineRecordAction(_WorkspaceFixture):
     """Tests for pipeline.record_action() — Step 6 ledger write."""
 
