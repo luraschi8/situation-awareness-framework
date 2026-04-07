@@ -140,6 +140,15 @@ def bootstrap():
             json.dump({"actions": proactive_actions}, f, indent=2)
         print(f"Proactive actions written to {actions_path}")
 
+    # --- Create _system domain for self-improvement engine ---
+    system_dir = paths.resolve(paths.SYSTEM_DOMAIN_DIR)
+    os.makedirs(system_dir, exist_ok=True)
+    review_queue = paths.resolve(paths.REVIEW_QUEUE_FILE)
+    if not os.path.exists(review_queue):
+        with open(review_queue, "w") as f:
+            f.write("# Review Queue\n\n_No pending items._\n")
+        print(f"Review queue created at {review_queue}")
+
     print(f"\nSAF structure created with domains: {', '.join(domains)}")
     print(f"Timezone: {user_timezone}")
     print(f"Work days: {', '.join(DAY_NAMES[d] for d in work_days)}")

@@ -17,6 +17,13 @@ ROUTER_CONFIG_FILE = os.path.join(SHARED_DIR, "router-config.json")
 USER_STATE_FILE = os.path.join(SHARED_DIR, "user-state.json")
 BRIEFING_FILE = os.path.join(RUNTIME_DIR, "SAF_BRIEFING.md")
 
+# Self-improvement engine paths
+SYSTEM_DOMAIN_DIR = os.path.join(DOMAINS_DIR, "_system")
+SNAPSHOT_DIR = os.path.join(SYSTEM_DOMAIN_DIR, ".snapshot")
+REVIEW_QUEUE_FILE = os.path.join(SYSTEM_DOMAIN_DIR, "review-queue.md")
+LAST_REVIEW_SUMMARY_FILE = os.path.join(SYSTEM_DOMAIN_DIR, "last-review-summary.md")
+SELF_REVIEW_TEMPLATE = os.path.join("templates", "self-review-protocol.md")
+
 
 def resolve(relative_path, workspace_root=None):
     """Resolves a memory-relative path against a workspace root.

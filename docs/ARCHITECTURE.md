@@ -468,7 +468,73 @@ call, which achieves the same effect.
 
 ---
 
-## 8. Extending SAF
+## 8. Self-Improvement Engine
+
+SAF includes a **Self-Improvement Engine** that enables the agent to
+audit and improve its own domain memory and configuration. This merges
+two concerns: behavioral regressions (learning from past mistakes) and
+knowledge maintenance (staleness, contradictions, indexing).
+
+### Architecture
+
+The engine follows SAF's core principle: **deterministic where possible,
+agentic only where necessary.**
+
+- `saf_core/lib/self_review.py` builds the review context, validates
+  configs, and manages snapshots — all deterministic, no LLM calls.
+- The **agent** reads the review protocol, identifies issues, writes
+  fixes using its own tools, and runs validation to verify its changes.
+- SAF provides a **snapshot/restore** safety net for config files.
+
+### Two Triggering Mechanisms
+
+**Proactive action (per-conversation, lightweight):**
+- `knowledge_audit` action registered in `proactive-actions.json`
+- Triggers weekly (Mondays by default)
+- Limited to domain files and `_index.md` — cannot modify config files
+- Agent reads protocol from `memory/domains/_system/`
+
+**Cron/scheduled (headless, full):**
+- `python3 -m skills.saf_core.self_review_cli --workspace /path --runner openclaw`
+- Full audit: staleness, contradictions, gaps, regressions, indexes
+- Can modify config files (with snapshot protection)
+- Uses `SelfReviewRunner` adapter protocol — agent-agnostic
+
+### Validation Layer
+
+`validate_workspace()` checks config file integrity:
+- `proactive-actions.json`: required fields, valid frequencies, trigger schema
+- `user-state.json`: valid timezone, work_days, phases, mode
+- `router-config.json`: valid domain → keyword mappings
+
+Exposed as an agent-callable CLI:
+```
+python3 -m skills.saf_core.validate --workspace /path
+# Exits 0 if valid, 1 if errors. JSON output to stdout.
+```
+
+### Snapshot Safety Net
+
+Before a full review, `snapshot_configs()` backs up all config files to
+`memory/domains/_system/.snapshot/`. If the agent breaks configs (fails
+validation), `restore_snapshot()` rolls back. If the agent session
+crashes, the next review detects the stale snapshot and restores it.
+
+### The `_system` Domain
+
+```
+memory/domains/_system/
+    review-queue.md           — items needing user input
+    last-review-summary.md    — agent's summary of last review
+    .snapshot/                — config backups (transient)
+```
+
+The `_` prefix means the pipeline's domain routing skips it. It is
+invisible to normal conversations.
+
+---
+
+## 9. Extending SAF
 
 ### Writing a new adapter
 
@@ -500,7 +566,7 @@ protocol.
 
 ---
 
-## 9. Non-Goals
+## 10. Non-Goals
 
 SAF is explicitly **not**:
 

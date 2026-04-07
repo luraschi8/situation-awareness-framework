@@ -32,6 +32,15 @@ ARCHETYPE_KEYWORDS = {
     },
 }
 
+_KNOWLEDGE_AUDIT_ACTION = {
+    "description": "Review domain memory for staleness and consistency",
+    "trigger": {"day_of_week": [0]},
+    "frequency": "weekly",
+    "domains": ["_system"],
+    "enabled": True,
+    "skip_modes": ["vacation", "dnd"],
+}
+
 ARCHETYPE_ACTIONS = {
     "professional": {
         "morning_briefing": {
@@ -50,6 +59,7 @@ ARCHETYPE_ACTIONS = {
             "enabled": True,
             "skip_modes": ["vacation"],
         },
+        "knowledge_audit": _KNOWLEDGE_AUDIT_ACTION,
     },
     "family": {
         "morning_briefing": {
@@ -68,6 +78,7 @@ ARCHETYPE_ACTIONS = {
             "enabled": True,
             "skip_modes": ["vacation"],
         },
+        "knowledge_audit": _KNOWLEDGE_AUDIT_ACTION,
     },
 }
 

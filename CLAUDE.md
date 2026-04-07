@@ -53,18 +53,19 @@ Orchestrated by `skills/saf_core/lib/pipeline.py`. See `docs/ARCHITECTURE.md` fo
 **Deterministic steps (run in `saf_core.pipeline`, no LLM calls):**
 
 0. **Temporal Gate** — `temporal.py` syncs with system clock. Resolves timezone, day phase, day type. Configured via `memory/shared/user-state.json`.
-1. **Dedup Lookup** — `ledger.py::get_today_actions()` reads `memory/shared/collective-ledger.json`.
-2. **Domain Routing** — `router.py::get_relevant_domains()` regex-matches message against `memory/shared/router-config.json`.
-3. **Relevance Gate** — `relevance.py` + pipeline rules produce blocked_actions.
+1. **Action Evaluation** — `actions.py` filters `proactive-actions.json` by trigger conditions against current temporal context.
+2. **Dedup Lookup** — `ledger.py::get_today_actions()` reads `memory/shared/collective-ledger.json`.
+3. **Relevance Gate** — `relevance.py` applies user-state rules (mode, suppressions) + dedup partition. Produces blocked_actions and available_actions.
+4. **Domain Routing** — `router.py::get_relevant_domains()` regex-matches message against `memory/shared/router-config.json`. Merges with action-sourced domains.
 
 **Agentic steps (run in the agent runtime):**
 
-4. **Domain Loading** — Agent reads the files SAF pointed to, using its own Read tool or sub-agents.
-5. **Reasoning** — Agent's LLM processes loaded context + user message.
+5. **Domain Loading** — Agent reads the files SAF pointed to, using its own Read tool or sub-agents.
+6. **Reasoning** — Agent's LLM processes loaded context + user message.
 
 **Deterministic again:**
 
-6. **Ledger Write** — Adapter parses `<saf-action id="..." status="..."/>` tags from response, calls `pipeline.record_action()`.
+7. **Ledger Write** — Adapter parses `<saf-action id="..." status="..."/>` tags from response, calls `pipeline.record_action()`.
 
 The entire framework is accessible through two functions: `pipeline.process(message, host)` and `pipeline.record_action(id, status, host)`. Framework adapters (`saf_openclaw`, future `saf_langchain`, etc.) implement the `SAFHost` and `SAFAdapter` protocols to bridge SAF into their framework's lifecycle events.
 
@@ -72,7 +73,7 @@ The entire framework is accessible through two functions: `pipeline.process(mess
 
 - `skills/saf_core/lib/` — Framework-agnostic core. Pipeline, protocols, deterministic steps. **Never imports from any framework.**
 - `skills/saf_openclaw/` — OpenClaw reference adapter. Hooks, renderer, install script.
-- `templates/` — Bootstrap artifacts: `HEARTBEAT.md`, `daily-actions.json`, `saf-init`
+- `templates/` — Bootstrap artifacts: `HEARTBEAT.md`, `daily-actions.json`, `saf-init`, `self-review-protocol.md`
 - `docs/` — Architecture and adapter author guide
 - `tests/` — Unit tests using `unittest`
 
@@ -82,6 +83,10 @@ The entire framework is accessible through two functions: `pipeline.process(mess
 - **Deterministic security before LLM** — Cryptographic validation runs as code (Layer 0), not as LLM reasoning. No prompt can bypass it.
 - **Physical deduplication** — Persistent JSON ledgers prevent repeated briefings. Atomic writes use `.tmp` + rename pattern.
 - **Domain topologies** — Memory is organized into `memory/domains/[domain]/` rather than flat retrieval, enabling intent-scoped context injection.
+
+### Self-Improvement Engine
+
+`skills/saf_core/lib/self_review.py` enables agent self-auditing of domain memory and config integrity. Two triggers: a `knowledge_audit` proactive action (lightweight, per-conversation, domain-only writes) and a cron CLI (`python3 -m skills.saf_core.self_review_cli`) for full headless reviews (can modify configs with snapshot protection). `validate_workspace()` is agent-callable via `python3 -m skills.saf_core.validate --workspace /path`. The `_system` domain (`memory/domains/_system/`) stores review queue and summaries.
 
 ### Multi-Agent Coordination (v3+)
 
